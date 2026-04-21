@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useGameState } from './hooks/useGameState';
 import { useAlbumArt } from './hooks/useAlbumArt';
 import { useAudioPreload } from './hooks/useAudioPreload';
@@ -7,6 +8,15 @@ import IntroScreen from './screens/IntroScreen';
 import LoadingScreen from './screens/LoadingScreen';
 import GameScreen from './screens/GameScreen';
 import ResultScreen from './screens/ResultScreen';
+
+// Shared fade variants used by every screen wrapper.
+const screenVariants = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  exit:    { opacity: 0 },
+};
+
+const screenTransition = { duration: 0.35, ease: 'easeInOut' as const };
 
 export default function App() {
   const { state, startGame, pick, setPhase, setWinnerAudio, restart } =
@@ -64,37 +74,77 @@ export default function App() {
   }
 
   return (
-    <>
+    <AnimatePresence mode="wait">
       {state.phase === 'intro' && (
-        <IntroScreen onStart={startGame} ready={artDone} />
+        <motion.div
+          key="intro"
+          variants={screenVariants}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          transition={screenTransition}
+          style={{ display: 'contents' }}
+        >
+          <IntroScreen onStart={startGame} ready={artDone} />
+        </motion.div>
       )}
 
       {state.phase === 'loading' && enrichedWinner && (
         // LoadingScreen is purely decorative here — the audio fetch in the
         // useEffect above drives the transition to 'result'.
-        <LoadingScreen song={enrichedWinner} />
+        <motion.div
+          key="loading"
+          variants={screenVariants}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          transition={screenTransition}
+          style={{ display: 'contents' }}
+        >
+          <LoadingScreen song={enrichedWinner} />
+        </motion.div>
       )}
 
       {state.phase === 'playing' && enrichedLeft && enrichedRight && (
-        <GameScreen
-          left={enrichedLeft}
-          right={enrichedRight}
-          round={state.round}
-          onPick={pick}
-        />
+        <motion.div
+          key="playing"
+          variants={screenVariants}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          transition={screenTransition}
+          style={{ display: 'contents' }}
+        >
+          <GameScreen
+            left={enrichedLeft}
+            right={enrichedRight}
+            round={state.round}
+            onPick={pick}
+          />
+        </motion.div>
       )}
 
       {state.phase === 'result' && enrichedWinner && (
-        <ResultScreen
-          winner={enrichedWinner}
-          wins={state.winnerWins}
-          history={state.history}
-          audioUrl={state.preloadedAudioUrl}
-          onRestart={handleRestart}
-          playAudio={play}
-          pauseAudio={pause}
-        />
+        <motion.div
+          key="result"
+          variants={screenVariants}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          transition={screenTransition}
+          style={{ display: 'contents' }}
+        >
+          <ResultScreen
+            winner={enrichedWinner}
+            wins={state.winnerWins}
+            history={state.history}
+            audioUrl={state.preloadedAudioUrl}
+            onRestart={handleRestart}
+            playAudio={play}
+            pauseAudio={pause}
+          />
+        </motion.div>
       )}
-    </>
+    </AnimatePresence>
   );
 }

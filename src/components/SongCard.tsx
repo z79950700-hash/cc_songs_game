@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import type { Song } from '../data/songs';
 import { proxyUrl, adjustColor } from '../utils/color';
@@ -10,9 +11,14 @@ interface SongCardProps {
 }
 
 export default function SongCard({ song, side, onPick, animating }: SongCardProps) {
+  const [imgError, setImgError] = useState(false);
+
   const base = song.dominantColor || song.color;
   const purl = song.coverUrl ? proxyUrl(song.coverUrl) : '';
   const fallbackGradient = `linear-gradient(145deg,${adjustColor(base, 60)} 0%,${base} 55%,${adjustColor(base, -50)} 100%)`;
+
+  // Show fallback div when: no purl at all, or image failed to load
+  const showFallback = !purl || imgError;
 
   return (
     <motion.div
@@ -26,22 +32,18 @@ export default function SongCard({ song, side, onPick, animating }: SongCardProp
       onClick={() => !animating && onPick()}
     >
       <div className="card-inner">
-        {purl ? (
+        {showFallback ? (
+          <div
+            className="card-album-thumb card-album-thumb--fallback"
+            style={{ background: fallbackGradient }}
+          />
+        ) : (
           <img
             className="card-album-thumb"
             src={purl}
             alt={song.album}
             crossOrigin="anonymous"
-            onError={(e) => {
-              const el = e.currentTarget;
-              el.removeAttribute('src');
-              el.style.cssText = `background:${fallbackGradient};width:220px;height:220px;border-radius:14px;display:block;margin:0 auto 1.5rem`;
-            }}
-          />
-        ) : (
-          <div
-            className="card-album-thumb"
-            style={{ background: fallbackGradient }}
+            onError={() => setImgError(true)}
           />
         )}
         <div className="card-title">{song.title}</div>
