@@ -1,0 +1,76 @@
+该文件旨在将“音乐奖项检索与结构化”能力封装为 AI Agent 的核心技能：
+
+技能名称：MusicAwardAnalyst (音乐荣誉追踪专家)
+
+核心逻辑：
+
+多源检索：覆盖金曲奖、HITO、各地区主流榜单等。
+
+数据校对：自动区分入围与获奖，校验颁奖年份与发布年份。
+
+商业维度：整合广告主题曲、流媒体年度冠军等非传统荣誉。
+
+格式化输出：支持直接导出符合开发需求的标准 JSON 格式。
+
+适用场景：适用于 OpenClaw、Cursor 等 AI Agent 项目的工具库集成，或作为知识库的技能描述文件。
+
+Python
+import os
+
+skill_content = """# SKILL.md: MusicAwardAnalyst (音乐荣誉追踪专家)
+
+## 1. 技能概述
+**技能名称**：`MusicAwardAnalyst`
+**描述**：专门用于检索、校验并结构化输出特定歌曲、专辑或音乐人的奖项记录、榜单成绩及社会影响力数据。
+
+## 2. 技能定义 (Tool Definition)
+```json
+{
+  "name": "music_award_analyst",
+  "description": "检索并整理音乐作品的奖项、榜单及荣誉记录，支持生成JSON报告。",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "query_target": { "type": "string", "description": "歌曲名、专辑名或歌手名" },
+      "scope": { "type": "string", "enum": ["single", "top_n", "discography"] },
+      "format": { "type": "string", "enum": ["json", "md"], "default": "json" }
+    },
+    "required": ["query_target", "scope"]
+  }
+}
+3. 执行逻辑 (Workflow)
+数据检索：通过多源搜索检索目标作品在各大颁奖礼（金曲奖、HITO等）的获奖记录。
+
+多源比对：交叉验证奖项名称、年份及状态（入围/获奖），确保信息准确。
+
+补充维度：检索流媒体平台年度榜单（KKBOX, Spotify等）及商业合作记录（广告曲）。
+
+结构化清洗：将散乱信息映射至标准 JSON 字段。
+
+文件导出：根据用户需求生成对应格式的文件。
+
+4. 系统提示词 (Prompt Template)
+Role: 资深音乐行业数据分析师。
+Constraint:
+
+严谨区分“正式奖项”与“荣誉称号”。
+
+对翻唱作品需明确标注版本。
+
+确保 JSON 字段完整，严禁遗漏关键奖项。
+
+5. 输出示例 (JSON)
+JSON
+[
+  {
+    "song_name": "伤心的人别听慢歌",
+    "awards": [
+      { "year": 2014, "award_name": "HITO流行音乐奖", "honor": "年度十大华语歌曲" },
+      { "year": 2013, "award_name": "MusicRadio中国TOP排行榜", "honor": "年度金曲" }
+    ]
+  }
+]
+"""
+
+with open("SKILL-v2.md", "w", encoding="utf-8") as f:
+f.write(skill_content)
