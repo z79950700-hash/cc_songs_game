@@ -115,7 +115,7 @@ export default function IntroScreen({ onStart, ready }: IntroScreenProps) {
         {ready ? '开始寻找 →' : '专辑封面加载中…'}
       </button>
 
-      <div style={{ position: 'absolute', bottom: 8, right: 12, fontSize: '0.6rem', color: 'rgba(255,255,255,0.25)', pointerEvents: 'none' }}>v-debug-b1b9cab</div>
+      <div style={{ position: 'absolute', top: 12, right: 12, fontSize: '0.6rem', color: 'rgba(255,255,255,0.4)', pointerEvents: 'none', zIndex: 999 }}>v-debug-b1b9cab</div>
 
       <div className="intro-rules">
         Top 50 热门歌曲 · 15 轮直觉对决 · 每次答案都是真实的你
