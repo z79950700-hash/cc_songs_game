@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { SONGS } from '../data/songs';
 import type { Song } from '../data/songs';
 import { proxyUrl, extractDominantColor } from '../utils/color';
+import { logArt } from '../utils/artLogger';
 
 // ===== TYPES =====
 
@@ -54,7 +55,10 @@ async function getSpotifyToken(): Promise<string | null> {
 async function fetchArtFromSpotify(albumName: string): Promise<string | null> {
   try {
     const token = await getSpotifyToken();
-    if (!token) return null;
+    if (!token) {
+      logArt({ album: albumName, source: 'Spotify', status: 'fail', detail: 'no token (env vars missing or request failed)' });
+      return null;
+    }
     const q = encodeURIComponent(`五月天 ${albumName}`);
     const resp = await fetch(
       `https://api.spotify.com/v1/search?q=${q}&type=album&market=TW&limit=5`,
@@ -63,16 +67,27 @@ async function fetchArtFromSpotify(albumName: string): Promise<string | null> {
         signal: AbortSignal.timeout(8000),
       }
     );
-    if (!resp.ok) return null;
+    if (!resp.ok) {
+      logArt({ album: albumName, source: 'Spotify', status: 'fail', detail: `HTTP ${resp.status}` });
+      return null;
+    }
     const data = await resp.json();
     const items: Array<{ images: Array<{ url: string }>; artists: Array<{ name: string }> }>
       = data?.albums?.items ?? [];
-    if (!items.length) return null;
+    if (!items.length) {
+      logArt({ album: albumName, source: 'Spotify', status: 'fail', detail: '0 results' });
+      return null;
+    }
     const matched = items.find(item => isMayday(item.artists.map(a => a.name)));
-    const pick = matched ?? items[0];
-    if (!pick?.images?.length) return null;
-    return pick.images[0].url;
-  } catch {
+    if (!matched) {
+      const artistNames = items.map(i => i.artists.map(a => a.name).join('/')).join(', ');
+      logArt({ album: albumName, source: 'Spotify', status: 'fail', detail: `artist filter excluded all ${items.length} results (got: ${artistNames}) → skipping` });
+      return null;
+    }
+    logArt({ album: albumName, source: 'Spotify', status: 'ok', detail: `artist="${matched.artists.map(a => a.name).join('/')}" url=${matched.images[0]?.url}` });
+    return matched.images[0]?.url ?? null;
+  } catch (e) {
+    logArt({ album: albumName, source: 'Spotify', status: 'fail', detail: `exception: ${e}` });
     return null;
   }
 }
@@ -85,33 +100,54 @@ async function fetchArtFromNetease(albumName: string, year: number): Promise<str
       'https://api.allorigins.win/raw?url=' + encodeURIComponent(searchUrl),
       'https://corsproxy.io/?' + encodeURIComponent(searchUrl),
     ];
-    const data = await Promise.any(
-      proxies.map(url =>
-        fetch(url, { signal: AbortSignal.timeout(8000) }).then(r => {
-          if (!r.ok) throw new Error(String(r.status));
-          return r.json();
-        })
-      )
-    );
+    let data: unknown;
+    try {
+      data = await Promise.any(
+        proxies.map(url =>
+          fetch(url, { signal: AbortSignal.timeout(8000) }).then(r => {
+            if (!r.ok) throw new Error(String(r.status));
+            return r.json();
+          })
+        )
+      );
+    } catch (e) {
+      logArt({ album: albumName, source: 'NetEase', status: 'fail', detail: `both proxies failed: ${e}` });
+      return null;
+    }
     const albums: Array<{ picUrl?: string; publishTime?: number; artists?: Array<{ name: string }> }>
-      = data?.result?.albums ?? [];
-    if (!albums.length) return null;
+      = (data as { result?: { albums?: unknown[] } })?.result?.albums as typeof albums ?? [];
+    if (!albums.length) {
+      logArt({ album: albumName, source: 'NetEase', status: 'fail', detail: '0 results from API' });
+      return null;
+    }
 
     const pool = albums.filter(a => isMayday((a.artists ?? []).map(x => x.name)));
-    const candidates = pool.length ? pool : albums;
+    const usedFallback = pool.length === 0;
+    const candidates = usedFallback ? albums : pool;
     const best = candidates.sort((a, b) => {
       const ya = Math.abs((a.publishTime ? new Date(a.publishTime).getFullYear() : 0) - year);
       const yb = Math.abs((b.publishTime ? new Date(b.publishTime).getFullYear() : 0) - year);
       return ya - yb;
     })[0];
 
-    return best.picUrl ? best.picUrl + '?param=600y600' : null;
-  } catch {
+    if (!best.picUrl) {
+      logArt({ album: albumName, source: 'NetEase', status: 'fail', detail: 'best result has no picUrl' });
+      return null;
+    }
+    if (usedFallback) {
+      const artistNames = albums.slice(0, 3).map(a => (a.artists ?? []).map(x => x.name).join('/')).join(', ');
+      logArt({ album: albumName, source: 'NetEase', status: 'ok', detail: `artist filter excluded all ${albums.length} (got: ${artistNames}) → used year-closest fallback` });
+    } else {
+      logArt({ album: albumName, source: 'NetEase', status: 'ok', detail: `matched ${pool.length}/${albums.length} by artist` });
+    }
+    return best.picUrl + '?param=600y600';
+  } catch (e) {
+    logArt({ album: albumName, source: 'NetEase', status: 'fail', detail: `exception: ${e}` });
     return null;
   }
 }
 
-// Source 2: iTunes Search API (fallback)
+// Source 3: iTunes Search API (last resort)
 async function fetchArtFromItunes(albumName: string, year: number): Promise<string | null> {
   const queries = [`五月天 ${albumName}`, `Mayday ${albumName}`, '五月天'];
   for (const q of queries) {
@@ -120,28 +156,48 @@ async function fetchArtFromItunes(albumName: string, year: number): Promise<stri
         `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=album&limit=8&media=music&country=tw`,
         { signal: AbortSignal.timeout(8000) }
       );
+      if (!resp.ok) {
+        logArt({ album: albumName, source: 'iTunes', status: 'fail', detail: `q="${q}" HTTP ${resp.status}` });
+        continue;
+      }
       const data = await resp.json();
-      if (!data.results?.length) continue;
+      if (!data.results?.length) {
+        logArt({ album: albumName, source: 'iTunes', status: 'fail', detail: `q="${q}" 0 results` });
+        continue;
+      }
       const all = data.results as Array<{ artworkUrl100: string; releaseDate?: string; artistName?: string }>;
       const pool = all.filter(r => isMayday([r.artistName ?? '']));
-      const candidates = pool.length ? pool : all;
+      const usedFallback = pool.length === 0;
+      const candidates = usedFallback ? all : pool;
       const best = candidates.sort((a, b) => {
         const ya = Math.abs(parseInt(a.releaseDate ?? '0') - year);
         const yb = Math.abs(parseInt(b.releaseDate ?? '0') - year);
         return ya - yb;
       })[0];
+      const note = usedFallback
+        ? `artist filter excluded all ${all.length} (artists: ${all.slice(0,3).map(r => r.artistName).join(', ')}) → used fallback`
+        : `matched ${pool.length}/${all.length} by artist`;
+      logArt({ album: albumName, source: 'iTunes', status: 'ok', detail: `q="${q}" ${note}` });
       return best.artworkUrl100.replace('100x100bb', '600x600bb');
-    } catch { /* try next query */ }
+    } catch (e) {
+      logArt({ album: albumName, source: 'iTunes', status: 'fail', detail: `q="${q}" exception: ${e}` });
+    }
   }
+  logArt({ album: albumName, source: 'iTunes', status: 'fail', detail: 'all queries exhausted' });
   return null;
 }
 
 async function fetchArtForAlbum(albumName: string, year: number): Promise<string | null> {
-  return (
+  const result =
     (await fetchArtFromSpotify(albumName)) ??
     (await fetchArtFromNetease(albumName, year)) ??
-    (await fetchArtFromItunes(albumName, year))
-  );
+    (await fetchArtFromItunes(albumName, year));
+  if (!result) {
+    logArt({ album: albumName, source: 'FINAL', status: 'fail', detail: 'all three sources failed — no cover art' });
+  } else {
+    logArt({ album: albumName, source: 'FINAL', status: 'ok', detail: 'cover loaded successfully' });
+  }
+  return result;
 }
 
 // ===== HOOK =====

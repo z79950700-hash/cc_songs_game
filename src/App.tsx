@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useGameState } from './hooks/useGameState';
 import { useAlbumArt } from './hooks/useAlbumArt';
@@ -8,6 +8,7 @@ import IntroScreen from './screens/IntroScreen';
 import LoadingScreen from './screens/LoadingScreen';
 import GameScreen from './screens/GameScreen';
 import ResultScreen from './screens/ResultScreen';
+import { getArtLogText } from './utils/artLogger';
 
 // Shared fade variants used by every screen wrapper.
 const screenVariants = {
@@ -22,6 +23,15 @@ export default function App() {
   const { state, startGame, pick, setPhase, setWinnerAudio, restart } =
     useGameState();
   const { songs, done: artDone } = useAlbumArt(true);
+  const [logCopied, setLogCopied] = useState(false);
+
+  function copyLog() {
+    const text = getArtLogText();
+    navigator.clipboard.writeText(text).then(() => {
+      setLogCopied(true);
+      setTimeout(() => setLogCopied(false), 2000);
+    });
+  }
   const { play, pause } = useAudioPreload();
 
   // Keep a ref to the enriched songs so GameScreen / ResultScreen always get
@@ -74,6 +84,19 @@ export default function App() {
   }
 
   return (
+    <>
+    <button
+      onClick={copyLog}
+      style={{
+        position: 'fixed', bottom: 10, left: 10, zIndex: 9999,
+        background: 'rgba(0,0,0,0.45)', color: 'rgba(255,255,255,0.55)',
+        border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6,
+        fontSize: '0.6rem', padding: '3px 7px', cursor: 'pointer',
+        backdropFilter: 'blur(4px)',
+      }}
+    >
+      {logCopied ? '已复制 ✓' : '日志'}
+    </button>
     <AnimatePresence mode="wait">
       {state.phase === 'intro' && (
         <motion.div
@@ -146,5 +169,6 @@ export default function App() {
         </motion.div>
       )}
     </AnimatePresence>
+    </>
   );
 }
