@@ -29,7 +29,7 @@ async function fetchArtForAlbum(
     try {
       const resp = await fetch(
         `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=album&limit=8&media=music&country=tw`,
-        { signal }
+        { signal: AbortSignal.any([signal, AbortSignal.timeout(8000)]) }
       );
       const data = await resp.json();
       if (!data.results?.length) continue;

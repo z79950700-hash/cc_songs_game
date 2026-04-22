@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Song } from '../data/songs';
 import type { HistoryEntry } from '../types/game';
 import { SONGS, AWARDS } from '../data/songs';
@@ -36,17 +36,41 @@ export default function ResultScreen({
   const coverSrc = winner.coverUrl ? proxyUrl(winner.coverUrl) : '';
   const fallbackGradient = `linear-gradient(145deg,${adjustColor(base, 60)} 0%,${base} 55%,${adjustColor(base, -50)} 100%)`;
 
-  // Start background audio when the result screen mounts
+  // iOS Safari blocks autoplay without user gesture — track whether play was blocked
+  const [playBlocked, setPlayBlocked] = useState(false);
+  const audioUrlRef = useRef(audioUrl);
+  audioUrlRef.current = audioUrl;
+
   useEffect(() => {
     if (!audioUrl) return;
     const isPreview =
       audioUrl.includes('itunes.apple.com') ||
       audioUrl.includes('mzstatic.com');
+    const audio = new Audio(audioUrl);
+    audio.loop = isPreview;
+    audio.volume = 0.4;
+    audio.play().then(() => {
+      setPlayBlocked(false);
+    }).catch(() => {
+      // iOS blocked autoplay — show tap-to-play button
+      setPlayBlocked(true);
+    });
+    // Store in playAudio ref so pause works on unmount
     playAudio(audioUrl, isPreview);
     return () => {
       pauseAudio();
     };
-  }, [audioUrl, playAudio, pauseAudio]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioUrl]);
+
+  function handleTapPlay() {
+    if (!audioUrlRef.current) return;
+    const isPreview =
+      audioUrlRef.current.includes('itunes.apple.com') ||
+      audioUrlRef.current.includes('mzstatic.com');
+    playAudio(audioUrlRef.current, isPreview);
+    setPlayBlocked(false);
+  }
 
   // Derived data
   const defeatedSongs: Song[] = history
@@ -83,6 +107,27 @@ export default function ResultScreen({
       <div className="result-scroll">
         {/* Header: title + album + divider */}
         <ResultHeader song={winner} />
+
+        {/* iOS tap-to-play button — only shown when autoplay was blocked */}
+        {playBlocked && audioUrl && (
+          <div style={{ textAlign: 'center', margin: '1rem 0 0' }}>
+            <button
+              onClick={handleTapPlay}
+              style={{
+                background: 'rgba(255,255,255,0.1)',
+                border: '1px solid rgba(255,255,255,0.3)',
+                borderRadius: '50px',
+                color: '#fff',
+                padding: '0.5rem 1.4rem',
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                letterSpacing: '0.08em',
+              }}
+            >
+              ▶ 点击播放音乐
+            </button>
+          </div>
+        )}
 
         {/* Lyrics typewriter */}
         <div
