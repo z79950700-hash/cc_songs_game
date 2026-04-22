@@ -77,15 +77,22 @@ async function fetchArtFromSpotify(albumName: string): Promise<string | null> {
   }
 }
 
-// Source 2: NetEase Cloud Music album search (via allorigins CORS proxy)
+// Source 2: NetEase Cloud Music album search (dual-proxy race via Promise.any)
 async function fetchArtFromNetease(albumName: string, year: number): Promise<string | null> {
   try {
     const searchUrl = `https://music.163.com/api/search/get?s=${encodeURIComponent('五月天 ' + albumName)}&type=10&offset=0&total=true&limit=8`;
-    const resp = await fetch(
+    const proxies = [
       'https://api.allorigins.win/raw?url=' + encodeURIComponent(searchUrl),
-      { signal: AbortSignal.timeout(8000) }
+      'https://corsproxy.io/?' + encodeURIComponent(searchUrl),
+    ];
+    const data = await Promise.any(
+      proxies.map(url =>
+        fetch(url, { signal: AbortSignal.timeout(8000) }).then(r => {
+          if (!r.ok) throw new Error(String(r.status));
+          return r.json();
+        })
+      )
     );
-    const data = await resp.json();
     const albums: Array<{ picUrl?: string; publishTime?: number; artists?: Array<{ name: string }> }>
       = data?.result?.albums ?? [];
     if (!albums.length) return null;
