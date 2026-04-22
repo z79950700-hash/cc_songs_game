@@ -19,7 +19,6 @@ export interface AlbumArtState {
 async function fetchArtForAlbum(
   albumName: string,
   year: number,
-  signal: AbortSignal
 ): Promise<string | null> {
   // Three-tier fallback matching the original prefetchAlbumArt logic:
   // 1. "五月天 <album>"  2. "Mayday <album>"  3. "五月天" (artist-only)
@@ -29,7 +28,7 @@ async function fetchArtForAlbum(
     try {
       const resp = await fetch(
         `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=album&limit=8&media=music&country=tw`,
-        { signal: AbortSignal.timeout(8000) }
+        { signal: AbortSignal.timeout(12000) }
       );
       const data = await resp.json();
       if (!data.results?.length) continue;
@@ -101,7 +100,6 @@ export function useAlbumArt(enabled: boolean): AlbumArtState {
             const art = await fetchArtForAlbum(
               ref.album,
               ref.year,
-              signal
             );
             if (art) {
               // Stamp every song on the same album
