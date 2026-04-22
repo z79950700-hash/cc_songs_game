@@ -16,7 +16,59 @@ export interface AlbumArtState {
 
 // ===== FETCH HELPERS =====
 
-// Source 1: NetEase Cloud Music album search (via allorigins CORS proxy)
+// Spotify token cache
+let spotifyToken: string | null = null;
+let spotifyTokenExpiry = 0;
+
+async function getSpotifyToken(): Promise<string | null> {
+  if (spotifyToken && Date.now() < spotifyTokenExpiry) return spotifyToken;
+  const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
+  const clientSecret = import.meta.env.VITE_SPOTIFY_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+  try {
+    const resp = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa(`${clientId}:${clientSecret}`),
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: 'grant_type=client_credentials',
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    spotifyToken = data.access_token;
+    spotifyTokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
+    return spotifyToken;
+  } catch {
+    return null;
+  }
+}
+
+// Source 1: Spotify API (direct, no proxy needed, stable)
+async function fetchArtFromSpotify(albumName: string): Promise<string | null> {
+  try {
+    const token = await getSpotifyToken();
+    if (!token) return null;
+    const q = encodeURIComponent(`五月天 ${albumName}`);
+    const resp = await fetch(
+      `https://api.spotify.com/v1/search?q=${q}&type=album&market=TW&limit=5`,
+      {
+        headers: { 'Authorization': `Bearer ${token}` },
+        signal: AbortSignal.timeout(8000),
+      }
+    );
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const items: Array<{ images: Array<{ url: string }> }> = data?.albums?.items ?? [];
+    if (!items.length || !items[0].images?.length) return null;
+    return items[0].images[0].url;
+  } catch {
+    return null;
+  }
+}
+
+// Source 2: NetEase Cloud Music album search (via allorigins CORS proxy)
 async function fetchArtFromNetease(albumName: string, year: number): Promise<string | null> {
   try {
     const searchUrl = `https://music.163.com/api/search/get?s=${encodeURIComponent('五月天 ' + albumName)}&type=10&offset=0&total=true&limit=8`;
@@ -64,8 +116,11 @@ async function fetchArtFromItunes(albumName: string, year: number): Promise<stri
 }
 
 async function fetchArtForAlbum(albumName: string, year: number): Promise<string | null> {
-  // Try NetEase first (better coverage for Chinese albums), fall back to iTunes
-  return (await fetchArtFromNetease(albumName, year)) ?? (await fetchArtFromItunes(albumName, year));
+  return (
+    (await fetchArtFromSpotify(albumName)) ??
+    (await fetchArtFromNetease(albumName, year)) ??
+    (await fetchArtFromItunes(albumName, year))
+  );
 }
 
 // ===== HOOK =====
