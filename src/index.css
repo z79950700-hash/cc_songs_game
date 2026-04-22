@@ -853,27 +853,38 @@ html, body {
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 600px) {
-  .card-inner { padding: 1.5rem 1.25rem; max-width: 200px; }
-  .card-album-thumb { width: 72px; height: 72px; margin-bottom: 1rem; }
-  .card-title { font-size: 1.2rem; }
-  .card-album { font-size: 0.72rem; }
-  .pick-btn { padding: 0.55rem 1.4rem; font-size: 0.82rem; }
-  .card-inner { max-width: none; }
+  .card-inner { padding: 1.5rem 1.25rem; }
+  .card-album-thumb { width: 100px; height: 100px; margin-bottom: 0.8rem; }
+  .card-title { font-size: 1.1rem; }
+  .card-album { font-size: 0.7rem; }
+  .pick-btn { padding: 0.55rem 1.2rem; font-size: 0.82rem; }
   .result-lyrics { margin: 0 1rem 1.5rem; }
+  .round-bar { width: 90px; font-size: 0.7rem; }
+  .vs-badge { width: 36px; height: 36px; font-size: 0.75rem; }
+  .result-scroll { padding: 2.5rem 1rem 4rem; }
+  .result-title { font-size: clamp(1.8rem, 8vw, 3rem); }
+  .result-stats-grid { gap: 0.5rem; }
+  .stat-value { font-size: 1.3rem; }
+}
+
+@media (max-width: 480px) {
+  .song-card { padding: 1.5rem 0.75rem; }
+  .card-inner { padding: 1rem 0.85rem; }
+  .card-album-thumb { width: 80px; height: 80px; }
+  .card-title { font-size: 1rem; }
 }
 
 @media (hover: none) {
-  /* Remove hover expand on touch devices */
-  .game-screen.hover-left .bg-left,
-  .game-screen.hover-left .bg-right,
-  .game-screen.hover-right .bg-right,
-  .game-screen.hover-right .bg-left { clip-path: unset; filter: blur(10px) brightness(0.5); }
-  .game-screen.hover-left .bg-left  { clip-path: polygon(0 0, 50% 0, 50% 100%, 0 100%); }
-  .game-screen.hover-left .bg-right { clip-path: polygon(50% 0, 100% 0, 100% 100%, 50% 100%); }
-  .game-screen.hover-right .bg-right { clip-path: polygon(50% 0, 100% 0, 100% 100%, 50% 100%); }
-  .game-screen.hover-right .bg-left  { clip-path: polygon(0 0, 50% 0, 50% 100%, 0 100%); }
-  .game-screen.hover-left .seam,
-  .game-screen.hover-right .seam { left: 50%; }
+  /* 触屏设备：禁用 hover 放大效果，保持 50/50 分割 */
   .game-screen.hover-left .song-card,
   .game-screen.hover-right .song-card { flex: 1; }
+  .game-screen.hover-left .seam,
+  .game-screen.hover-right .seam { left: 50%; }
+  .game-screen.hover-left .bg-left,
+  .game-screen.hover-left .bg-right,
+  .game-screen.hover-right .bg-left,
+  .game-screen.hover-right .bg-right {
+    clip-path: none;
+    filter: none;
+  }
 }

@@ -38,9 +38,10 @@ export default function GameScreen({ left, right, round, onPick }: GameScreenPro
     background: `radial-gradient(ellipse at 65% 50%, ${adjustColor(rc, 60)} 0%, ${rc} 45%, ${adjustColor(rc, -60)} 100%)`,
   };
 
-  // Compute flex values for each side based on hover state
-  const leftFlex = hover === 'left' ? 1.24 : hover === 'right' ? 0.76 : 1;
-  const rightFlex = hover === 'right' ? 1.24 : hover === 'left' ? 0.76 : 1;
+  // Disable flex expand on touch devices
+  const isTouch = window.matchMedia('(hover: none)').matches;
+  const leftFlex = !isTouch && hover === 'left' ? 1.24 : !isTouch && hover === 'right' ? 0.76 : 1;
+  const rightFlex = !isTouch && hover === 'right' ? 1.24 : !isTouch && hover === 'left' ? 0.76 : 1;
   const transition = 'flex var(--transition-speed) cubic-bezier(.4,0,.2,1)';
 
   const screenClass = [
