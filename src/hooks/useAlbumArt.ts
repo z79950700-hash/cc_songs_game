@@ -236,21 +236,18 @@ export function useAlbumArt(enabled: boolean): AlbumArtState {
       // Working copy shared across this effect run
       const working: Song[] = SONGS.map((s) => ({ ...s }));
 
-      await Promise.allSettled(
-        uniqueAlbums.map(async (ref) => {
+      // Worker pool: max 3 concurrent album fetches to avoid iTunes rate-limiting
+      const queue = [...uniqueAlbums];
+      async function worker() {
+        while (queue.length) {
+          const ref = queue.shift()!;
           if (signal.aborted) return;
           try {
-            const art = await fetchArtForAlbum(
-              ref.album,
-              ref.year,
-            );
+            const art = await fetchArtForAlbum(ref.album, ref.year);
             if (art) {
-              // Stamp every song on the same album
               working.forEach((s) => {
                 if (s.album === ref.album) s.coverUrl = art;
               });
-
-              // Extract dominant colour via canvas (weserv proxy adds CORS headers)
               const purl = proxyUrl(art);
               const dominant = await extractDominantColor(purl);
               if (dominant) {
@@ -260,18 +257,17 @@ export function useAlbumArt(enabled: boolean): AlbumArtState {
               }
             }
           } catch {
-            // Keep gradient fallback — no action needed
+            // gradient fallback
           } finally {
             completed++;
             if (!signal.aborted) {
               setProgress(Math.round((completed / total) * 100));
-              // Publish intermediate updates so LoadingScreen can show
-              // partial artwork as it arrives.
               setSongs([...working]);
             }
           }
-        })
-      );
+        }
+      }
+      await Promise.allSettled(Array.from({ length: 3 }, worker));
 
       if (!signal.aborted) {
         setSongs([...working]);
