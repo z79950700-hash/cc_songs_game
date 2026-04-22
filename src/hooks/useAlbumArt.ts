@@ -14,47 +14,58 @@ export interface AlbumArtState {
   done: boolean;
 }
 
-// ===== ITUNES FETCH HELPERS =====
+// ===== FETCH HELPERS =====
 
-async function fetchArtForAlbum(
-  albumName: string,
-  year: number,
-): Promise<string | null> {
-  // Three-tier fallback matching the original prefetchAlbumArt logic:
-  // 1. "五月天 <album>"  2. "Mayday <album>"  3. "五月天" (artist-only)
+// Source 1: NetEase Cloud Music album search (via allorigins CORS proxy)
+async function fetchArtFromNetease(albumName: string, year: number): Promise<string | null> {
+  try {
+    const searchUrl = `https://music.163.com/api/search/get?s=${encodeURIComponent('五月天 ' + albumName)}&type=10&offset=0&total=true&limit=8`;
+    const resp = await fetch(
+      'https://api.allorigins.win/raw?url=' + encodeURIComponent(searchUrl),
+      { signal: AbortSignal.timeout(8000) }
+    );
+    const data = await resp.json();
+    const albums: Array<{ picUrl?: string; publishTime?: number }> = data?.result?.albums ?? [];
+    if (!albums.length) return null;
+
+    const best = albums.sort((a, b) => {
+      const ya = Math.abs((a.publishTime ? new Date(a.publishTime).getFullYear() : 0) - year);
+      const yb = Math.abs((b.publishTime ? new Date(b.publishTime).getFullYear() : 0) - year);
+      return ya - yb;
+    })[0];
+
+    return best.picUrl ? best.picUrl + '?param=600y600' : null;
+  } catch {
+    return null;
+  }
+}
+
+// Source 2: iTunes Search API (fallback)
+async function fetchArtFromItunes(albumName: string, year: number): Promise<string | null> {
   const queries = [`五月天 ${albumName}`, `Mayday ${albumName}`, '五月天'];
-
   for (const q of queries) {
     try {
       const resp = await fetch(
         `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=album&limit=8&media=music&country=tw`,
-        { signal: AbortSignal.timeout(12000) }
+        { signal: AbortSignal.timeout(8000) }
       );
       const data = await resp.json();
       if (!data.results?.length) continue;
-
-      // Prefer the result whose release year is closest to the song's year
-      const best: { artworkUrl100: string; releaseDate?: string } = (
-        data.results as Array<{
-          artworkUrl100: string;
-          releaseDate?: string;
-        }>
-      ).sort((a, b) => {
-        const ya = Math.abs(
-          parseInt(a.releaseDate ?? '0') - year
-        );
-        const yb = Math.abs(
-          parseInt(b.releaseDate ?? '0') - year
-        );
-        return ya - yb;
-      })[0];
-
+      const best = (data.results as Array<{ artworkUrl100: string; releaseDate?: string }>)
+        .sort((a, b) => {
+          const ya = Math.abs(parseInt(a.releaseDate ?? '0') - year);
+          const yb = Math.abs(parseInt(b.releaseDate ?? '0') - year);
+          return ya - yb;
+        })[0];
       return best.artworkUrl100.replace('100x100bb', '600x600bb');
-    } catch {
-      // CORS / network / abort — try next query
-    }
+    } catch { /* try next query */ }
   }
   return null;
+}
+
+async function fetchArtForAlbum(albumName: string, year: number): Promise<string | null> {
+  // Try NetEase first (better coverage for Chinese albums), fall back to iTunes
+  return (await fetchArtFromNetease(albumName, year)) ?? (await fetchArtFromItunes(albumName, year));
 }
 
 // ===== HOOK =====
