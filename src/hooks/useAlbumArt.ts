@@ -16,6 +16,11 @@ export interface AlbumArtState {
 
 // ===== FETCH HELPERS =====
 
+const MAYDAY_NAMES = ['五月天', 'mayday'];
+function isMayday(names: string[]): boolean {
+  return names.some(n => MAYDAY_NAMES.some(m => n.toLowerCase().includes(m)));
+}
+
 // Spotify token cache
 let spotifyToken: string | null = null;
 let spotifyTokenExpiry = 0;
@@ -60,9 +65,13 @@ async function fetchArtFromSpotify(albumName: string): Promise<string | null> {
     );
     if (!resp.ok) return null;
     const data = await resp.json();
-    const items: Array<{ images: Array<{ url: string }> }> = data?.albums?.items ?? [];
-    if (!items.length || !items[0].images?.length) return null;
-    return items[0].images[0].url;
+    const items: Array<{ images: Array<{ url: string }>; artists: Array<{ name: string }> }>
+      = data?.albums?.items ?? [];
+    if (!items.length) return null;
+    const matched = items.find(item => isMayday(item.artists.map(a => a.name)));
+    const pick = matched ?? items[0];
+    if (!pick?.images?.length) return null;
+    return pick.images[0].url;
   } catch {
     return null;
   }
@@ -77,10 +86,13 @@ async function fetchArtFromNetease(albumName: string, year: number): Promise<str
       { signal: AbortSignal.timeout(8000) }
     );
     const data = await resp.json();
-    const albums: Array<{ picUrl?: string; publishTime?: number }> = data?.result?.albums ?? [];
+    const albums: Array<{ picUrl?: string; publishTime?: number; artists?: Array<{ name: string }> }>
+      = data?.result?.albums ?? [];
     if (!albums.length) return null;
 
-    const best = albums.sort((a, b) => {
+    const pool = albums.filter(a => isMayday((a.artists ?? []).map(x => x.name)));
+    const candidates = pool.length ? pool : albums;
+    const best = candidates.sort((a, b) => {
       const ya = Math.abs((a.publishTime ? new Date(a.publishTime).getFullYear() : 0) - year);
       const yb = Math.abs((b.publishTime ? new Date(b.publishTime).getFullYear() : 0) - year);
       return ya - yb;
@@ -103,12 +115,14 @@ async function fetchArtFromItunes(albumName: string, year: number): Promise<stri
       );
       const data = await resp.json();
       if (!data.results?.length) continue;
-      const best = (data.results as Array<{ artworkUrl100: string; releaseDate?: string }>)
-        .sort((a, b) => {
-          const ya = Math.abs(parseInt(a.releaseDate ?? '0') - year);
-          const yb = Math.abs(parseInt(b.releaseDate ?? '0') - year);
-          return ya - yb;
-        })[0];
+      const all = data.results as Array<{ artworkUrl100: string; releaseDate?: string; artistName?: string }>;
+      const pool = all.filter(r => isMayday([r.artistName ?? '']));
+      const candidates = pool.length ? pool : all;
+      const best = candidates.sort((a, b) => {
+        const ya = Math.abs(parseInt(a.releaseDate ?? '0') - year);
+        const yb = Math.abs(parseInt(b.releaseDate ?? '0') - year);
+        return ya - yb;
+      })[0];
       return best.artworkUrl100.replace('100x100bb', '600x600bb');
     } catch { /* try next query */ }
   }
